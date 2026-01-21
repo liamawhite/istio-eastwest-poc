@@ -1,0 +1,113 @@
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: api-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: proxy
+  namespace: istio-system
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - api-gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/"
+    route:
+    - destination:
+        host: proxy.default.svc.cluster.local
+        port:
+          number: 8080
+---
+# VS for each possible permutation of the top-level subdomain
+# Ignoring wildcards and gateways for now as these require manual fixes from app teams.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: wikipedia
+  namespace: istio-system
+spec:
+  hosts:
+  - "en.wikipedia.org"
+  gateways:
+  - mesh # avoid chaining gateways together i.e. always force public ingress through the internal gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/"
+    rewrite:
+      authority: "httpbin.org"
+    route:
+    - destination:
+        host: httpbin.org
+        port:
+          number: 443
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: google
+  namespace: default
+spec:
+  hosts:
+  - "en.wikipedia.org"
+  gateways:
+  - mesh # avoid chaining gateways together i.e. always force public ingress through the internal gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/"
+    rewrite:
+      authority: "google.com"
+    route:
+    - destination:
+        host: google.com
+        port:
+          number: 443
+---
+apiVersion: networking.istio.io/v1
+kind: ServiceEntry
+metadata:
+  name: wikipedia
+spec:
+  hosts:
+  # every possible permutation of the top-level subdomain
+  # cant use wildcards because of resolution issues
+  - "en.wikipedia.org"
+  - "httpbin.org"
+  - "google.com"
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  - number: 80
+    name: http
+    protocol: HTTP
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# DR for each possible top-level subdomain permutation to ensure we are specific and reduce blast radius
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: wikipedia-tls
+spec:
+  host: httpbin.org
+  trafficPolicy:
+    tls:
+      mode: SIMPLE

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./setup.sh)",
+      "Bash(lsof:*)",
+      "Bash(kubectl get:*)",
+      "Bash(kubectl apply:*)",
+      "Bash(./scripts/cleanup.sh:*)",
+      "Bash(kubectl describe:*)",
+      "Bash(kubectl rollout:*)"
+    ]
+  }
+}
